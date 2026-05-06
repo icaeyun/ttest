@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>출발 위치 설정</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 로딩 스플래시 -->
+  <div id="splash" class="splash" role="alert" aria-live="assertive">
+    <div class="splash-inner">
+      <div class="splash-spinner"></div>
+      <p class="splash-text">현재 위치 확인 중</p>
+    </div>
+  </div>
+
+  <!-- 메인 앱 -->
+  <div id="app" class="app hidden">
+
+    <!-- 상단 바 -->
+    <header class="top-bar">
+      <button class="btn-back" aria-label="뒤로 가기">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M15 19l-7-7 7-7" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <h1 class="top-bar-title">출발지 설정</h1>
+      <div class="top-bar-spacer"></div>
+    </header>
+
+    <!-- 지도 영역 -->
+    <div id="map-wrap" class="map-wrap" aria-hidden="true">
+      <div id="map" class="map"></div>
+      <!-- CSS 전용 중앙 고정 핀 -->
+      <div id="center-pin" class="center-pin">
+        <div class="pin-label">출발</div>
+        <div class="pin-stem"></div>
+        <div class="pin-dot"></div>
+      </div>
+    </div>
+
+    <!-- 현재 위치 FAB -->
+    <button id="btn-my-location" class="fab-my-location" aria-label="현재 위치로 이동">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="4" fill="#3B82F6"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- 하단 시트 -->
+    <div class="bottom-sheet">
+      <div class="sheet-handle" aria-hidden="true"><span></span></div>
+
+      <div class="location-header">
+        <div class="location-badge">출발</div>
+        <h2 id="location-name" class="location-name">위치를 확인하고 있습니다</h2>
+      </div>
+
+      <div id="announce-region" class="announce-region"
+           role="status" aria-live="polite" aria-atomic="true">
+        지도를 움직여 출발 위치를 설정하세요.
+      </div>
+
+      <div class="action-row">
+        <button id="btn-confirm" class="btn-action btn-confirm-location">
+          <span>여기서 출발</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Kakao Maps SDK -->
+  <script
+    src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=93fb3b70693c7f3aba7c97dd76479fd7&libraries=services&autoload=false"
+    onerror="console.error('[Kakao SDK script 로드 실패]')">
+  </script>
+  <script src="main.js"></script>
+</body>
+</html>
