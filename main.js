@@ -187,6 +187,11 @@ let koVoice           = null;
 let pendingSpeechText = '';
 let speechSeq         = 0;
 
+/* iOS Safari는 사용자 제스처 안에서 speechSynthesis가 한 번 실행되어야
+   이후 비동기 핀 안내가 안정적으로 읽힌다.
+   실제 안내 문장은 말하지 않고, 지도 드래그 제스처에서 조용히 엔진만 깨운다. */
+const SPEECH_PRIME_TEXT = '\u200B';
+
 function hasSpeechSupport() {
   return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 }
@@ -201,34 +206,6 @@ function resumeSpeechEngine() {
   try { window.speechSynthesis.resume(); } catch (_) {}
 }
 
-function unlockSpeech() {
-  if (!hasSpeechSupport()) return;
-
-  resumeSpeechEngine();
-
-  if (!speechUnlocked) {
-    speechUnlocked = true;
-
-    // iOS/Safari 계열은 첫 사용자 제스처 안에서 speak가 한 번 호출되어야
-    // 이후 안내문 읽기가 안정적으로 동작한다.
-    try {
-      const empty = new SpeechSynthesisUtterance(' ');
-      empty.lang = 'ko-KR';
-      empty.volume = 0.01;
-      empty.rate = 1.0;
-      const voice = pickKoreanVoice();
-      if (voice) empty.voice = voice;
-      window.speechSynthesis.speak(empty);
-    } catch (_) {}
-  }
-
-  if (pendingSpeechText) {
-    const text = pendingSpeechText;
-    pendingSpeechText = '';
-    setTimeout(() => speakText(text), 120);
-  }
-}
-
 function pickKoreanVoice() {
   if (!hasSpeechSupport()) return null;
   if (koVoice) return koVoice;
@@ -238,6 +215,57 @@ function pickKoreanVoice() {
             voices.find(v => v.name && /korean|한국|ko/i.test(v.name)) ||
             null;
   return koVoice;
+}
+
+function makeKoreanUtterance(text) {
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang  = 'ko-KR';
+  utt.rate  = 1.05;
+  utt.pitch = 1.0;
+  utt.volume = 1.0;
+
+  const voice = pickKoreanVoice();
+  if (voice) utt.voice = voice;
+
+  return utt;
+}
+
+function makeSilentPrimeUtterance() {
+  const utt = new SpeechSynthesisUtterance(SPEECH_PRIME_TEXT);
+  utt.lang = 'ko-KR';
+  utt.rate = 1.0;
+  utt.pitch = 1.0;
+  // 사용자가 들을 수 있는 안내 문장은 내지 않고 Safari의 음성 엔진만 깨운다.
+  utt.volume = 0.0;
+
+  const voice = pickKoreanVoice();
+  if (voice) utt.voice = voice;
+
+  return utt;
+}
+
+function unlockSpeech() {
+  if (!hasSpeechSupport()) return;
+
+  resumeSpeechEngine();
+
+  if (!speechUnlocked) {
+    speechUnlocked = true;
+
+    // 중요: iOS Safari에서는 이 함수가 반드시 지도 드래그 같은
+    // 사용자 제스처 안에서 실행되어야 이후 자동 안내가 안정적으로 나온다.
+    try {
+      safeCancelSpeech();
+      resumeSpeechEngine();
+      window.speechSynthesis.speak(makeSilentPrimeUtterance());
+    } catch (_) {}
+  }
+
+  if (pendingSpeechText) {
+    const text = pendingSpeechText;
+    pendingSpeechText = '';
+    setTimeout(() => speakText(text), 250);
+  }
 }
 
 if (hasSpeechSupport() && window.speechSynthesis.onvoiceschanged !== undefined) {
@@ -250,8 +278,8 @@ if (hasSpeechSupport() && window.speechSynthesis.onvoiceschanged !== undefined) 
 function speakText(text) {
   if (!text || !hasSpeechSupport()) return;
 
-  // 아직 사용자 터치/클릭이 없으면 마지막 안내문만 보관한다.
-  // 지도 드래그 시작, 버튼 클릭, 터치 이벤트에서 unlockSpeech가 호출되면 읽는다.
+  // Safari에서는 페이지 진입 직후 자동 speak가 막힐 수 있으므로
+  // 첫 터치/클릭 전에는 마지막 안내문만 저장한다.
   if (!speechUnlocked) {
     pendingSpeechText = text;
     return;
@@ -262,28 +290,26 @@ function speakText(text) {
   safeCancelSpeech();
   resumeSpeechEngine();
 
-  // cancel 직후 바로 speak하면 Safari/Google 앱에서 씹히는 경우가 있어
-  // 아주 짧게 지연시킨다.
+  // cancel 직후 바로 speak하면 iOS Safari에서 씹히는 경우가 있어 짧게 지연한다.
   setTimeout(() => {
     if (seq !== speechSeq) return;
 
     try {
       resumeSpeechEngine();
+      const utt = makeKoreanUtterance(text);
 
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.lang  = 'ko-KR';
-      utt.rate  = 1.05;
-      utt.pitch = 1.0;
-      utt.volume = 1.0;
-
-      const voice = pickKoreanVoice();
-      if (voice) utt.voice = voice;
+      utt.onerror = (e) => {
+        console.warn('[speech] 음성 안내 오류', e);
+      };
 
       window.speechSynthesis.speak(utt);
+
+      // iOS Safari가 중간에 paused 상태로 빠지는 경우를 한 번 더 깨운다.
+      setTimeout(() => resumeSpeechEngine(), 200);
     } catch (e) {
       console.warn('[speech] 음성 안내 실패', e);
     }
-  }, 80);
+  }, 120);
 }
 
 /* =========================================================
@@ -499,6 +525,7 @@ function setupCustomDrag() {
 
     clearTimeout(timer);
     requestGen++;
+    pendingSpeechText = ''; // 드래그 시작 시 이전 핀 안내가 늦게 읽히지 않게 비움
     safeCancelSpeech();
 
     unlockSpeech();
@@ -894,14 +921,12 @@ function bind() {
   /* splash 위치 권한 버튼 */
   if ($btnGrantLoc) {
     $btnGrantLoc.addEventListener('click', () => {
-      unlockSpeech();
       acquireLocation(true);
     });
   }
 
   if ($btnSkipLoc) {
     $btnSkipLoc.addEventListener('click', () => {
-      unlockSpeech();
       pendingLocationWarning = LOC_FALLBACK_MSG;
       boot(FALLBACK_LAT, FALLBACK_LNG);
     });
@@ -971,10 +996,7 @@ function bind() {
     });
   }
 
-  document.addEventListener('pointerdown', unlockSpeech, { once: true, passive: true });
-  document.addEventListener('touchstart', unlockSpeech, { once: true, passive: true });
-  document.addEventListener('click', unlockSpeech, { once: true });
-  document.addEventListener('keydown', unlockSpeech, { once: true });
+  // 전역 첫 터치로 음성을 깨우지 않는다. 지도 드래그/주요 버튼 제스처에서만 조용히 unlock한다.
 }
 
 /* =========================================================
