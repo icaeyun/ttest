@@ -744,26 +744,13 @@ function acquireLocation(fromUserGesture = false) {
   }
 
   try {
-    /*
-      Chrome / Google 앱 일부 환경에서는 watchPosition만으로는
-      권한 팝업이 늦게 뜨거나 사용자가 인식하기 어렵게 동작할 수 있다.
-      그래서 getCurrentPosition을 먼저 한 번 호출해 브라우저 기본 위치 권한 팝업을
-      즉시 유도하고, watchPosition은 기존처럼 더 정확한 좌표 보정용으로 유지한다.
-      위치/POI/음성/지도 구조는 건드리지 않는 최소 수정이다.
-    */
-    navigator.geolocation.getCurrentPosition(onPos, onErr, {
-      enableHighAccuracy: true,
-      timeout: LOC_MAX_WAIT_MS,
-      maximumAge: 0,
-    });
-
     watchId = navigator.geolocation.watchPosition(onPos, onErr, {
       enableHighAccuracy: true,
       timeout: LOC_MAX_WAIT_MS,
       maximumAge: 0,
     });
   } catch (e) {
-    console.warn('[geolocation] 위치 권한 요청 시작 실패', e);
+    console.warn('[geolocation] watchPosition 호출 실패', e);
     settleFail('위치 권한 요청을 시작하지 못했습니다. Safari 또는 Chrome에서 다시 열어주세요.', true);
     return;
   }
