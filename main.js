@@ -170,7 +170,7 @@ let requestGen  = 0;
 let locationRequestRunning = false;
 let locationBooted = false;
 
-/* 모바일 Safari: 지도 진입 전 1회 터치로 음성 엔진을 조용히 언락 */
+/* iOS 계열 브라우저/앱: 지도 진입 전 1회 터치로 음성 엔진을 조용히 언락 */
 let voiceGatePassed = false;
 let voiceGateOpening = false;
 
@@ -884,15 +884,14 @@ function needsSafariVoiceGate() {
   if (!hasSpeechSupport()) return false;
 
   const ua = navigator.userAgent || '';
+
+  // iOS의 Safari/Chrome/Google 앱은 모두 WebKit 기반이라
+  // 음성 언락이 비슷하게 막힐 수 있다. Safari만 보지 말고 iOS 전체에 게이트를 적용한다.
   const isIOS =
     /iPhone|iPad|iPod/i.test(ua) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  const isSafari =
-    /Safari/i.test(ua) &&
-    !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Android/i.test(ua);
-
-  return isIOS && isSafari;
+  return isIOS;
 }
 
 function showSafariVoiceGate(lat, lng) {
@@ -922,7 +921,11 @@ function showSafariVoiceGate(lat, lng) {
     btn.textContent = '출발 위치 안내 시작';
     $splashActions.appendChild(btn);
 
-    btn.addEventListener('click', proceedFromSafariVoiceGate, { once: true });
+    // Google 앱/iOS Chrome에서는 click만으로 음성 언락이 약하게 잡히는 경우가 있어
+    // 실제 버튼 입력에서 pointerdown/touchend/click을 모두 받는다.
+    btn.addEventListener('pointerdown', proceedFromSafariVoiceGate, { once: true, capture: true });
+    btn.addEventListener('touchend', proceedFromSafariVoiceGate, { once: true, capture: true });
+    btn.addEventListener('click', proceedFromSafariVoiceGate, { once: true, capture: true });
   }
 
   function proceedFromSafariVoiceGate(e) {
@@ -934,7 +937,7 @@ function showSafariVoiceGate(lat, lng) {
     if (voiceGatePassed) return;
     voiceGatePassed = true;
 
-    // 이 클릭/터치 제스처 안에서 Safari 음성 엔진을 조용히 언락한다.
+    // 이 클릭/터치 제스처 안에서 iOS 음성 엔진을 조용히 언락한다.
     unlockSpeech();
 
     if ($splashActions) $splashActions.hidden = true;
@@ -947,7 +950,7 @@ function showSafariVoiceGate(lat, lng) {
     });
   }
 
-  // 모바일 Safari에서 위치 권한 팝업 직후의 터치가 화면 전체 클릭으로 이어질 수 있어
+  // iOS 계열 브라우저/앱에서 위치 권한 팝업 직후의 터치가 화면 전체 클릭으로 이어질 수 있어
   // 시작 화면 전체 클릭 진행은 막고, 버튼 클릭으로만 음성 언락을 시작한다.
 }
 
