@@ -502,7 +502,7 @@ function setupCustomDrag() {
     safeCancelSpeech();
 
     unlockSpeech();
-  });
+  }, { passive: true, capture: true });
 
   $mapEl.addEventListener('pointermove', (e) => {
     if (!dragging || e.pointerId !== activePtrId) return;
@@ -971,10 +971,32 @@ function bind() {
     });
   }
 
-  document.addEventListener('pointerdown', unlockSpeech, { once: true, passive: true });
-  document.addEventListener('touchstart', unlockSpeech, { once: true, passive: true });
-  document.addEventListener('click', unlockSpeech, { once: true });
-  document.addEventListener('keydown', unlockSpeech, { once: true });
+  /*
+   * Safari 음성 언락 허들 낮추기
+   * - 지도/Kakao Map 내부에서 이벤트가 먹혀도 capture 단계에서 먼저 unlockSpeech 실행
+   * - 별도 안내 멘트 없이 기존 빈 음성으로 조용히 언락
+   * - 지도 클릭, 지도 드래그 시작, 하단 컴포넌트 클릭, 키보드 입력 전부 대응
+   */
+  const unlockOptions = { once: true, passive: true, capture: true };
+
+  window.addEventListener('pointerdown', unlockSpeech, unlockOptions);
+  window.addEventListener('touchstart', unlockSpeech, unlockOptions);
+  window.addEventListener('mousedown', unlockSpeech, unlockOptions);
+  window.addEventListener('click', unlockSpeech, unlockOptions);
+  window.addEventListener('keydown', unlockSpeech, { once: true, capture: true });
+
+  document.addEventListener('pointerdown', unlockSpeech, unlockOptions);
+  document.addEventListener('touchstart', unlockSpeech, unlockOptions);
+  document.addEventListener('mousedown', unlockSpeech, unlockOptions);
+  document.addEventListener('click', unlockSpeech, unlockOptions);
+  document.addEventListener('keydown', unlockSpeech, { once: true, capture: true });
+
+  if ($mapEl) {
+    $mapEl.addEventListener('pointerdown', unlockSpeech, unlockOptions);
+    $mapEl.addEventListener('touchstart', unlockSpeech, unlockOptions);
+    $mapEl.addEventListener('mousedown', unlockSpeech, unlockOptions);
+    $mapEl.addEventListener('click', unlockSpeech, unlockOptions);
+  }
 }
 
 /* =========================================================
