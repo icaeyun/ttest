@@ -170,6 +170,10 @@ let requestGen  = 0;
 let locationRequestRunning = false;
 let locationBooted = false;
 
+/* 모바일 Safari: 지도 진입 전 1회 터치로 음성 엔진을 조용히 언락 */
+let voiceGatePassed = false;
+let voiceGateOpening = false;
+
 /* boot 직후 announce-region에 표시할 경고 메시지 */
 let pendingLocationWarning = null;
 
@@ -876,7 +880,85 @@ function retryLocationOnce() {
 /* =========================================================
    부팅
    ========================================================= */
+function needsSafariVoiceGate() {
+  if (!hasSpeechSupport()) return false;
+
+  const ua = navigator.userAgent || '';
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  const isSafari =
+    /Safari/i.test(ua) &&
+    !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Android/i.test(ua);
+
+  return isIOS && isSafari;
+}
+
+function showSafariVoiceGate(lat, lng) {
+  if (voiceGateOpening) return;
+  voiceGateOpening = true;
+
+  if (!$splash || !$app) {
+    voiceGatePassed = true;
+    boot(lat, lng);
+    return;
+  }
+
+  setSplashText(
+    '출발 위치 안내를 시작할게요',
+    '화면을 한 번 누르면 현재 위치를 확인하고 안내를 준비합니다.'
+  );
+
+  if ($splashSpinner) $splashSpinner.classList.add('is-hidden');
+
+  if ($splashActions) {
+    $splashActions.hidden = false;
+    $splashActions.innerHTML = '';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'splash-btn splash-btn-primary';
+    btn.textContent = '출발 위치 안내 시작';
+    $splashActions.appendChild(btn);
+
+    btn.addEventListener('click', proceedFromSafariVoiceGate, { once: true });
+  }
+
+  function proceedFromSafariVoiceGate(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (voiceGatePassed) return;
+    voiceGatePassed = true;
+
+    // 이 클릭/터치 제스처 안에서 Safari 음성 엔진을 조용히 언락한다.
+    unlockSpeech();
+
+    if ($splashActions) $splashActions.hidden = true;
+    if ($splashSpinner) $splashSpinner.classList.remove('is-hidden');
+
+    setSplashText('출발 위치를 불러오는 중', null);
+
+    requestAnimationFrame(() => {
+      boot(lat, lng);
+    });
+  }
+
+  // 버튼을 정확히 누르지 않아도, 이 시작 화면 어디든 한 번 누르면 진행된다.
+  $splash.addEventListener('pointerdown', proceedFromSafariVoiceGate, { once: true, capture: true });
+  $splash.addEventListener('touchstart', proceedFromSafariVoiceGate, { once: true, capture: true });
+  $splash.addEventListener('click', proceedFromSafariVoiceGate, { once: true, capture: true });
+}
+
 function boot(lat, lng) {
+  if (needsSafariVoiceGate() && !voiceGatePassed) {
+    showSafariVoiceGate(lat, lng);
+    return;
+  }
+
   locationBooted = true;
   if (!$splash || !$app) return;
   $splash.classList.add('fade-out');
