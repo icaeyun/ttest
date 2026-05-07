@@ -457,6 +457,17 @@ function isNonRoadsidePoi(poi) {
   return NON_ROADSIDE_KEYWORDS.some(keyword => poi.name.includes(keyword));
 }
 
+const HARD_INTERNAL_KEYWORDS = [
+  '놀이터', '어린이공원', '공원', '운동장', '산책로', '보행로',
+  '아파트', '단지', '학교', '대학교', '캠퍼스',
+  '건물내', '건물 내', '내부', '지하'
+];
+
+function isHardInternalPoi(poi) {
+  if (!poi || !poi.name) return false;
+  return HARD_INTERNAL_KEYWORDS.some(keyword => poi.name.includes(keyword));
+}
+
 function isRoadNameCarRoad(roadName) {
   if (!roadName) return false;
   return roadName.includes('대로') ||
@@ -468,23 +479,18 @@ function isLikelyCarRoadsidePoi(poi, roadName) {
   if (!poi) return false;
   if (isNonRoadsidePoi(poi)) return false;
   if (!isRoadNameCarRoad(roadName)) return false;
+  if (!ROAD_FACING_CATS.includes(poi.cat)) return false;
 
-  // 대로/로 계열 도로명이 잡힌 상태에서
-  // 대표 지점이 놀이터/공원/단지 같은 내부 장소가 아니면 도로변 가능성을 더 넓게 허용한다.
-  if (ROAD_FACING_CATS.includes(poi.cat)) {
-    return poi.dist <= POI_NEAR_LIMIT;
-  }
-
-  // 카테고리가 애매해도 핀과 대표 지점이 아주 가까우면 도로변 근처로 본다.
-  return poi.dist <= 25;
+  // 허들을 높인다:
+  // 핀과 대표 지점이 아주 가까운 경우에만 도로변으로 본다.
+  // 도로명주소만으로는 절대 도로변이라고 단정하지 않는다.
+  return poi.dist <= 20;
 }
 
 function composeAnnouncement(lat, lng, info) {
   const parts = [];
   const mainPoi = pickBestPoi(info.pois);
   const isCarRoadside = isLikelyCarRoadsidePoi(mainPoi, info.roadName);
-  const roadNameLooksCarRoad = isRoadNameCarRoad(info.roadName);
-  const isInsideLikePlace = mainPoi && isNonRoadsidePoi(mainPoi);
 
   /* ① 핀 위치 */
   if (mainPoi) {
@@ -514,25 +520,21 @@ function composeAnnouncement(lat, lng, info) {
      - 놀이터/공원/단지/학교/내부 공간은 도로변으로 단정하지 않는다. */
   if (mainPoi && isCarRoadside) {
     if (info.roadName && info.roadName.includes('대로')) {
-      parts.push('차가 다니는 대로변과 가까워 택시 승차 위치로 적절합니다.');
+      parts.push('대로변과 가까워 택시 승차 위치로 적절합니다.');
     } else {
-      parts.push('차가 다니는 도로변과 가까워 택시 승차 위치로 적절합니다.');
+      parts.push('도로변과 가까워 택시 승차 위치로 적절합니다.');
     }
-  } else if (roadNameLooksCarRoad && !isInsideLikePlace) {
-    if (info.roadName && info.roadName.includes('대로')) {
-      parts.push('차가 다니는 대로변과 가까워 택시 승차 위치로 적절합니다.');
-    } else {
-      parts.push('차가 다니는 도로변과 가까워 택시 승차 위치로 적절합니다.');
-    }
+  } else if (mainPoi && isHardInternalPoi(mainPoi)) {
+    parts.push('승차하기 어려운 내부 위치일 수 있습니다. 큰길 쪽에서 승차 위치를 다시 확인해주세요.');
   } else if (mainPoi && mainPoi.cat === 'SW8' && !isNonRoadsidePoi(mainPoi)) {
-    parts.push('지하철역 출입구 주변이므로 차가 다니는 도로 쪽에서 승차 위치를 확인해주세요.');
+    parts.push('지하철역 출입구 주변입니다. 실제 승차 가능한 위치인지 확인해주세요.');
   } else if (mainPoi) {
-    parts.push('차가 다니는 큰길 쪽에서 승차 위치를 다시 확인해주세요.');
+    parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
   } else if (info.roadName) {
     if (info.roadName.includes('길')) {
-      parts.push('골목길 부근일 수 있으므로 차가 다니는 큰길 쪽에서 승차 위치를 확인해주세요.');
+      parts.push('골목길 부근일 수 있으므로 승차 위치를 다시 확인해주세요.');
     } else {
-      parts.push('정확한 도로변 여부를 확인하기 어려우므로 차가 다니는 도로 쪽에서 승차 위치를 다시 확인해주세요.');
+      parts.push('정확한 승차 가능 여부를 확인하기 어려우므로 위치를 다시 확인해주세요.');
     }
   }
 
