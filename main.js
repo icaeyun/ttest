@@ -147,7 +147,6 @@ const $btnSkipLoc  = document.getElementById('btn-skip-location');
 const $app       = document.getElementById('app');
 const $mapEl     = document.getElementById('map');
 const $pin       = document.getElementById('center-pin');
-const $pinDot    = document.querySelector('.pin-dot');
 const $locName   = document.getElementById('location-name');
 const $announce  = document.getElementById('announce-region');
 const $btnMyLoc  = document.getElementById('btn-my-location');
@@ -296,36 +295,6 @@ function haversine(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 +
             Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-
-/**
- * 화면에 보이는 핀의 동그란 dot 중심이 실제로 덮고 있는 지도 좌표를 반환한다.
- * 핀의 CSS 위치는 건드리지 않고, 안내/출발지 확정 기준 좌표만 이 지점으로 맞춘다.
- */
-function getPinDotTargetLatLng() {
-  if (!map || !$mapEl || !$pinDot) return map ? map.getCenter() : null;
-
-  const proj = map.getProjection();
-  if (!proj) return map.getCenter();
-
-  const mapRect = $mapEl.getBoundingClientRect();
-  const dotRect = $pinDot.getBoundingClientRect();
-
-  const x = dotRect.left + dotRect.width / 2 - mapRect.left;
-  const y = dotRect.top + dotRect.height / 2 - mapRect.top;
-
-  if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    return map.getCenter();
-  }
-
-  return proj.coordsFromContainerPoint(new kakao.maps.Point(x, y));
-}
-
-function updateUIFromPinDot() {
-  const target = getPinDotTargetLatLng();
-  if (!target) return;
-  updateUI(target.getLat(), target.getLng());
 }
 
 /* =========================================================
@@ -504,7 +473,8 @@ function scheduleUpdate() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     if (!map) return;
-    updateUIFromPinDot();
+    const ctr = map.getCenter();
+    updateUI(ctr.getLat(), ctr.getLng());
   }, ANNOUNCE_DELAY_MS);
 }
 
@@ -599,7 +569,7 @@ function initMap(lat, lng) {
     scheduleUpdate();
   });
 
-  requestAnimationFrame(updateUIFromPinDot);
+  updateUI(lat, lng);
 }
 
 /* =========================================================
@@ -970,9 +940,9 @@ function bind() {
   $btnConf.addEventListener('click', () => {
     unlockSpeech();
     if (!map) return;
-    const target = getPinDotTargetLatLng() || map.getCenter();
-    const lat = target.getLat();
-    const lng = target.getLng();
+    const ctr = map.getCenter();
+    const lat = ctr.getLat();
+    const lng = ctr.getLng();
 
     requestGen++;
     const gen = requestGen;
