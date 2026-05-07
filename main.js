@@ -298,6 +298,7 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+
 /**
  * 화면에 보이는 핀의 동그란 dot 중심이 실제로 덮고 있는 지도 좌표를 반환한다.
  * 핀의 CSS 위치는 건드리지 않고, 안내/출발지 확정 기준 좌표만 이 지점으로 맞춘다.
