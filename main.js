@@ -176,13 +176,16 @@ let pendingLocationWarning = null;
 /* =========================================================
    음성 안내 (Web Speech API)
    ---------------------------------------------------------
-   iOS/Safari/Chrome/Google 앱 계열은 사용자 제스처 전에는
-   음성이 막힐 수 있으므로, 마지막 안내문을 보관했다가
-   첫 터치/클릭 이후 다시 읽는다.
+   원래처럼 지도 드래그/버튼 터치 후 하단 안내문을
+   앱 자체 음성으로 읽어주도록 복구한다.
+   - 위치/POI/핀 로직은 건드리지 않음
+   - Safari/Chrome/Google 앱에서 speechSynthesis가 멈춰 있을 때
+     resume → cancel → speak 순서로 다시 실행
    ========================================================= */
-let speechUnlocked   = false;
-let koVoice          = null;
+let speechUnlocked    = false;
+let koVoice           = null;
 let pendingSpeechText = '';
+let speechSeq         = 0;
 
 function hasSpeechSupport() {
   return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -190,34 +193,46 @@ function hasSpeechSupport() {
 
 function safeCancelSpeech() {
   if (!hasSpeechSupport()) return;
-  try { window.safeCancelSpeech(); } catch (_) {}
+  try { window.speechSynthesis.cancel(); } catch (_) {}
+}
+
+function resumeSpeechEngine() {
+  if (!hasSpeechSupport()) return;
+  try { window.speechSynthesis.resume(); } catch (_) {}
 }
 
 function unlockSpeech() {
   if (!hasSpeechSupport()) return;
 
+  resumeSpeechEngine();
+
   if (!speechUnlocked) {
     speechUnlocked = true;
+
+    // iOS/Safari 계열은 첫 사용자 제스처 안에서 speak가 한 번 호출되어야
+    // 이후 안내문 읽기가 안정적으로 동작한다.
     try {
       const empty = new SpeechSynthesisUtterance(' ');
-      empty.lang   = 'ko-KR';
-      empty.volume = 0;
+      empty.lang = 'ko-KR';
+      empty.volume = 0.01;
+      empty.rate = 1.0;
+      const voice = pickKoreanVoice();
+      if (voice) empty.voice = voice;
       window.speechSynthesis.speak(empty);
     } catch (_) {}
   }
 
-  pickKoreanVoice();
-
   if (pendingSpeechText) {
     const text = pendingSpeechText;
     pendingSpeechText = '';
-    setTimeout(() => speakText(text), 180);
+    setTimeout(() => speakText(text), 120);
   }
 }
 
 function pickKoreanVoice() {
   if (!hasSpeechSupport()) return null;
   if (koVoice) return koVoice;
+
   const voices = window.speechSynthesis.getVoices() || [];
   koVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko')) ||
             voices.find(v => v.name && /korean|한국|ko/i.test(v.name)) ||
@@ -235,24 +250,40 @@ if (hasSpeechSupport() && window.speechSynthesis.onvoiceschanged !== undefined) 
 function speakText(text) {
   if (!text || !hasSpeechSupport()) return;
 
-  // 사용자 제스처 전이면 브라우저가 막을 수 있으므로 마지막 안내문을 저장
+  // 아직 사용자 터치/클릭이 없으면 마지막 안내문만 보관한다.
+  // 지도 드래그 시작, 버튼 클릭, 터치 이벤트에서 unlockSpeech가 호출되면 읽는다.
   if (!speechUnlocked) {
     pendingSpeechText = text;
     return;
   }
 
+  const seq = ++speechSeq;
+
   safeCancelSpeech();
-  try {
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang  = 'ko-KR';
-    utt.rate  = 1.0;
-    utt.pitch = 1.0;
-    const voice = pickKoreanVoice();
-    if (voice) utt.voice = voice;
-    window.speechSynthesis.speak(utt);
-  } catch (e) {
-    console.warn('[speech] 음성 안내 실패', e);
-  }
+  resumeSpeechEngine();
+
+  // cancel 직후 바로 speak하면 Safari/Google 앱에서 씹히는 경우가 있어
+  // 아주 짧게 지연시킨다.
+  setTimeout(() => {
+    if (seq !== speechSeq) return;
+
+    try {
+      resumeSpeechEngine();
+
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang  = 'ko-KR';
+      utt.rate  = 1.05;
+      utt.pitch = 1.0;
+      utt.volume = 1.0;
+
+      const voice = pickKoreanVoice();
+      if (voice) utt.voice = voice;
+
+      window.speechSynthesis.speak(utt);
+    } catch (e) {
+      console.warn('[speech] 음성 안내 실패', e);
+    }
+  }, 80);
 }
 
 /* =========================================================
@@ -500,6 +531,11 @@ function setupCustomDrag() {
     dragging = false;
     $pin.classList.remove('lifting');
     try { $mapEl.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    // 드래그가 끝나는 순간도 사용자 제스처이므로,
+    // 이 타이밍에서 음성 엔진을 한 번 더 깨운다.
+    unlockSpeech();
+
     scheduleUpdate();
   }
 
@@ -935,8 +971,10 @@ function bind() {
     });
   }
 
+  document.addEventListener('pointerdown', unlockSpeech, { once: true, passive: true });
+  document.addEventListener('touchstart', unlockSpeech, { once: true, passive: true });
   document.addEventListener('click', unlockSpeech, { once: true });
-  document.addEventListener('touchstart', unlockSpeech, { once: true });
+  document.addEventListener('keydown', unlockSpeech, { once: true });
 }
 
 /* =========================================================
