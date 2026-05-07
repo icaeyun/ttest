@@ -170,7 +170,7 @@ let requestGen  = 0;
 let locationRequestRunning = false;
 let locationBooted = false;
 
-/* iOS 계열 브라우저/앱: 지도 진입 전 1회 터치로 음성 엔진을 조용히 언락 */
+/* iOS 계열 브라우저/앱: 위치 권한/지도 진입 전 1회 터치로 음성 엔진을 조용히 언락 */
 let voiceGatePassed = false;
 let voiceGateOpening = false;
 
@@ -230,6 +230,33 @@ function unlockSpeech() {
     const text = pendingSpeechText;
     pendingSpeechText = '';
     setTimeout(() => speakText(text), 120);
+  }
+}
+
+function unlockSpeechWithPrimer(text) {
+  if (!hasSpeechSupport()) return;
+
+  // Google 앱에서는 빈 음성/낮은 볼륨이 실제 언락으로 인정되지 않는 경우가 있어
+  // 시작 버튼 클릭 안에서 짧은 실제 음성을 한 번 재생한다.
+  speechUnlocked = true;
+  pendingSpeechText = '';
+
+  safeCancelSpeech();
+  resumeSpeechEngine();
+
+  try {
+    const utt = new SpeechSynthesisUtterance(text || '출발 위치 안내를 시작합니다.');
+    utt.lang = 'ko-KR';
+    utt.rate = 1.05;
+    utt.pitch = 1.0;
+    utt.volume = 1.0;
+
+    const voice = pickKoreanVoice();
+    if (voice) utt.voice = voice;
+
+    window.speechSynthesis.speak(utt);
+  } catch (e) {
+    console.warn('[speech] 시작 음성 언락 실패', e);
   }
 }
 
@@ -894,80 +921,70 @@ function needsSafariVoiceGate() {
   return isIOS;
 }
 
-function showSafariVoiceGate(lat, lng) {
+function showVoiceStartGate(next) {
   if (voiceGateOpening) return;
   voiceGateOpening = true;
 
   if (!$splash || !$app) {
     voiceGatePassed = true;
-    boot(lat, lng);
+    next();
     return;
   }
 
   setSplashText(
     '출발 위치 안내를 시작할게요',
-    '아래 버튼을 누르면 현재 위치를 확인하고 안내를 준비합니다.'
+    '아래 버튼을 누르면 음성 안내를 준비한 뒤 위치 권한을 확인합니다.'
   );
 
   if ($splashSpinner) $splashSpinner.classList.add('is-hidden');
 
+  let startBtn = null;
+
   if ($splashActions) {
     $splashActions.hidden = false;
-    $splashActions.innerHTML = '';
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'splash-btn splash-btn-primary';
-    btn.textContent = '출발 위치 안내 시작';
-    $splashActions.appendChild(btn);
+    // 기존 위치 권한 버튼은 지우지 않는다.
+    // 지워버리면 위치 권한 실패 시 "위치 사용 허용하기" 버튼을 다시 쓸 수 없다.
+    if ($btnGrantLoc) $btnGrantLoc.style.display = 'none';
+    if ($btnSkipLoc) $btnSkipLoc.style.display = 'none';
 
-    // Google 앱/iOS Chrome에서는 pointerdown만으로 음성 언락이 인정되지 않는 경우가 있다.
-    // 첫 입력에서는 언락만 먼저 시도하고, 손을 떼는 touchend/click에서 한 번 더 언락한 뒤 지도에 진입한다.
-    btn.addEventListener('pointerdown', primeVoiceGate, { capture: true });
-    btn.addEventListener('touchstart', primeVoiceGate, { capture: true });
-    btn.addEventListener('mousedown', primeVoiceGate, { capture: true });
+    startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'splash-btn splash-btn-primary';
+    startBtn.textContent = '출발 위치 안내 시작';
+    $splashActions.appendChild(startBtn);
 
-    btn.addEventListener('touchend', proceedFromSafariVoiceGate, { once: true, capture: true });
-    btn.addEventListener('pointerup', proceedFromSafariVoiceGate, { once: true, capture: true });
-    btn.addEventListener('mouseup', proceedFromSafariVoiceGate, { once: true, capture: true });
-    btn.addEventListener('click', proceedFromSafariVoiceGate, { once: true, capture: true });
+    // 실제 기능 버튼이 아니라, 앱 진입 전에 음성만 풀어주는 전용 시작 버튼이다.
+    startBtn.addEventListener('click', proceedFromVoiceStartGate, { once: true });
   }
 
-  function primeVoiceGate() {
-    // pointerdown/touchstart 단계에서는 화면을 넘기지 않고 음성 엔진만 먼저 깨운다.
-    // Google 앱에서는 이 단계만으로는 부족할 수 있어, proceed 단계에서 한 번 더 실행한다.
-    unlockSpeech();
-  }
-
-  function proceedFromSafariVoiceGate(e) {
+  function proceedFromVoiceStartGate(e) {
     if (voiceGatePassed) return;
     voiceGatePassed = true;
 
-    // touchend/click/pointerup 단계에서 한 번 더 실행해야 Google 앱에서 잡히는 경우가 있다.
-    unlockSpeech();
+    if (e) e.preventDefault();
+
+    // 모바일 Google/Safari에서 빈 음성이 언락으로 인정되지 않을 수 있으므로
+    // 사용자가 누른 click 안에서 짧은 실제 음성을 한 번 재생한다.
+    unlockSpeechWithPrimer('출발 위치 안내를 시작합니다.');
+
+    if (startBtn && startBtn.parentNode) startBtn.remove();
+    if ($btnGrantLoc) $btnGrantLoc.style.display = '';
+    if ($btnSkipLoc) $btnSkipLoc.style.display = '';
 
     if ($splashActions) $splashActions.hidden = true;
     if ($splashSpinner) $splashSpinner.classList.remove('is-hidden');
 
-    setSplashText('출발 위치를 불러오는 중', null);
+    setSplashText('위치 권한을 확인하고 있습니다', '권한 팝업이 뜨면 허용을 눌러주세요.');
 
-    // 너무 빨리 화면을 제거하면 Google 앱에서 첫 음성 호출이 씹히는 경우가 있어
-    // 아주 짧게 유지한 뒤 지도에 진입한다.
+    // 시작 음성이 씹히지 않도록 스플래시를 잠깐 유지한 뒤 위치 권한 흐름으로 들어간다.
     setTimeout(() => {
-      boot(lat, lng);
-    }, 180);
+      next();
+    }, 700);
   }
-
-  // iOS 계열 브라우저/앱에서 위치 권한 팝업 직후의 터치가 화면 전체 클릭으로 이어질 수 있어
-  // 시작 화면 전체 클릭 진행은 막고, 버튼 클릭으로만 음성 언락을 시작한다.
 }
 
 function boot(lat, lng) {
-  if (needsSafariVoiceGate() && !voiceGatePassed) {
-    showSafariVoiceGate(lat, lng);
-    return;
-  }
-
   locationBooted = true;
   if (!$splash || !$app) return;
   $splash.classList.add('fade-out');
@@ -1111,7 +1128,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
     window.kakao.maps.load(() => {
-      startLocationFlow();
+      if (needsSafariVoiceGate() && !voiceGatePassed) {
+        showVoiceStartGate(() => startLocationFlow());
+      } else {
+        startLocationFlow();
+      }
     });
   } else {
     showKakaoLoadError();
