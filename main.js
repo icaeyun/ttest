@@ -491,6 +491,7 @@ function composeAnnouncement(lat, lng, info) {
   const parts = [];
   const mainPoi = pickBestPoi(info.pois);
   const isCarRoadside = isLikelyCarRoadsidePoi(mainPoi, info.roadName);
+  const roadNameLooksCarRoad = isRoadNameCarRoad(info.roadName);
 
   /* ① 핀 위치 */
   if (mainPoi) {
@@ -524,17 +525,21 @@ function composeAnnouncement(lat, lng, info) {
     } else {
       parts.push('도로변과 가까워 택시 승차 위치로 적절합니다.');
     }
-  } else if (mainPoi && isHardInternalPoi(mainPoi)) {
-    parts.push('승차하기 어려운 내부 위치일 수 있습니다. 큰길 쪽에서 승차 위치를 다시 확인해주세요.');
+  } else if (mainPoi && isHardInternalPoi(mainPoi) && !roadNameLooksCarRoad) {
+    parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
+  } else if (roadNameLooksCarRoad) {
+    parts.push('도로와 가까운 위치입니다. 주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
   } else if (mainPoi && mainPoi.cat === 'SW8' && !isNonRoadsidePoi(mainPoi)) {
     parts.push('지하철역 출입구 주변입니다. 실제 승차 가능한 위치인지 확인해주세요.');
+  } else if (mainPoi && isHardInternalPoi(mainPoi)) {
+    parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
   } else if (mainPoi) {
     parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
   } else if (info.roadName) {
     if (info.roadName.includes('길')) {
-      parts.push('골목길 부근일 수 있으므로 승차 위치를 다시 확인해주세요.');
+      parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
     } else {
-      parts.push('정확한 승차 가능 여부를 확인하기 어려우므로 위치를 다시 확인해주세요.');
+      parts.push('주변 상황을 확인한 뒤 안전한 승차 위치를 선택해주세요.');
     }
   }
 
