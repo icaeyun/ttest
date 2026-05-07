@@ -21,7 +21,7 @@
   --g700:         #374151;
   --g800:         #1F2937;
   --g900:         #111827;
-  --pin-dark:     #1A1A1A;
+  --pin-dark:     #000000;
   --safe-t:       env(safe-area-inset-top, 0px);
   --safe-b:       env(safe-area-inset-bottom, 0px);
   --sheet-h:      320px;
@@ -71,7 +71,46 @@ html, body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .splash-text { font-size: 17px; font-weight: 700; color: var(--g900); margin-bottom: 6px; }
-.splash-sub  { font-size: 13px; color: var(--g500); line-height: 1.5; }
+.splash-sub  { font-size: 13px; color: var(--g500); line-height: 1.5; max-width: 280px; margin: 0 auto; }
+
+.splash-actions {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  width: 240px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.splash-btn {
+  height: 46px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: -0.2px;
+  transition: background .12s, transform .12s;
+}
+.splash-btn:active { transform: scale(.98); }
+.splash-btn-primary {
+  background: var(--blue);
+  color: var(--white);
+}
+.splash-btn-primary:active { background: #2563EB; }
+.splash-btn-secondary {
+  background: var(--g100);
+  color: var(--g700);
+}
+.splash-btn-secondary:active { background: var(--g200); }
+
+/* spinner 숨김 처리 */
+.splash-spinner.is-hidden {
+  display: none;
+}
 
 /* =========================================
    App
@@ -137,8 +176,8 @@ html, body {
   transition: transform .18s ease-out, filter .18s ease-out;
 }
 .pin-label {
-  background: var(--white);
-  color: var(--pin-dark);
+  background: #000000;
+  color: #FFFFFF;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -147,13 +186,13 @@ html, body {
   line-height: 1;
   white-space: nowrap;
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, .18),
+    0 2px 6px rgba(0, 0, 0, .22),
     0 0 0 1px rgba(0, 0, 0, .04);
 }
 .pin-stem {
   width: 2px;
   height: 14px;
-  background: var(--pin-dark);
+  background: #000000;
   margin-top: 1px;
   flex-shrink: 0;
 }
@@ -161,7 +200,7 @@ html, body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--pin-dark);
+  background: #000000;
   flex-shrink: 0;
   box-shadow: 0 0 0 3px rgba(26, 26, 26, .12);
 }
