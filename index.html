@@ -11,9 +11,19 @@
   <!-- 로딩 스플래시 -->
   <div id="splash" class="splash" role="alert" aria-live="assertive">
     <div class="splash-inner">
-      <div class="splash-spinner"></div>
-      <p class="splash-text">현재 위치 확인 중</p>
+      <div class="splash-spinner" id="splash-spinner"></div>
+      <p class="splash-text" id="splash-text">현재 위치 확인 중</p>
       <p class="splash-sub" id="splash-sub" hidden></p>
+      <div class="splash-actions" id="splash-actions" hidden>
+        <button id="btn-grant-location"
+                class="splash-btn splash-btn-primary" type="button">
+          위치 사용 허용하기
+        </button>
+        <button id="btn-skip-location"
+                class="splash-btn splash-btn-secondary" type="button">
+          위치 없이 계속하기
+        </button>
+      </div>
     </div>
   </div>
 
