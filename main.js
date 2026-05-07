@@ -163,7 +163,6 @@ let places      = null;
 let geoPos      = null;       // { lat, lng, accuracy } | null
 let timer       = null;
 let dragging    = false;
-let movedDuringDrag = false;
 let lastPtrX    = 0;
 let lastPtrY    = 0;
 let activePtrId = null;
@@ -491,7 +490,6 @@ function setupCustomDrag() {
 
     activePtrId = e.pointerId;
     dragging = true;
-    movedDuringDrag = false;
     lastPtrX = e.clientX;
     lastPtrY = e.clientY;
 
@@ -502,7 +500,8 @@ function setupCustomDrag() {
     clearTimeout(timer);
     requestGen++;
     safeCancelSpeech();
-    pendingSpeechText = '';
+
+    unlockSpeech();
   });
 
   $mapEl.addEventListener('pointermove', (e) => {
@@ -514,9 +513,6 @@ function setupCustomDrag() {
     lastPtrY = e.clientY;
 
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-
-    movedDuringDrag = true;
-    if (!speechUnlocked) unlockSpeech();
 
     const proj   = map.getProjection();
     const center = map.getCenter();
@@ -536,9 +532,9 @@ function setupCustomDrag() {
     $pin.classList.remove('lifting');
     try { $mapEl.releasePointerCapture(e.pointerId); } catch (_) {}
 
-    // 실제로 지도를 드래그한 경우에만 음성 엔진을 깨운다.
-    // 단순 클릭/탭으로는 unlock 하지 않는다.
-    if (movedDuringDrag && !speechUnlocked) unlockSpeech();
+    // 드래그가 끝나는 순간도 사용자 제스처이므로,
+    // 이 타이밍에서 음성 엔진을 한 번 더 깨운다.
+    unlockSpeech();
 
     scheduleUpdate();
   }
@@ -548,10 +544,6 @@ function setupCustomDrag() {
 
   $mapEl.addEventListener('touchmove', (e) => {
     if (e.touches.length === 1) e.preventDefault();
-    if (dragging && !speechUnlocked) {
-      movedDuringDrag = true;
-      unlockSpeech();
-    }
   }, { passive: false });
 }
 
@@ -902,12 +894,14 @@ function bind() {
   /* splash 위치 권한 버튼 */
   if ($btnGrantLoc) {
     $btnGrantLoc.addEventListener('click', () => {
+      unlockSpeech();
       acquireLocation(true);
     });
   }
 
   if ($btnSkipLoc) {
     $btnSkipLoc.addEventListener('click', () => {
+      unlockSpeech();
       pendingLocationWarning = LOC_FALLBACK_MSG;
       boot(FALLBACK_LAT, FALLBACK_LNG);
     });
@@ -915,6 +909,7 @@ function bind() {
 
   /* 현재 위치 버튼 */
   $btnMyLoc.addEventListener('click', () => {
+    unlockSpeech();
     if (!map) return;
 
     if (!geoPos) {
@@ -930,6 +925,7 @@ function bind() {
 
   /* 여기서 출발 */
   $btnConf.addEventListener('click', () => {
+    unlockSpeech();
     if (!map) return;
     const ctr = map.getCenter();
     const lat = ctr.getLat();
@@ -953,6 +949,7 @@ function bind() {
   /* 어디로 갈까요? 행 (현재는 placeholder 동작) */
   if ($rowDest) {
     const onDestActivate = () => {
+      unlockSpeech();
       const msg = '목적지 입력 화면은 곧 제공됩니다.';
       $announce.classList.remove('is-warning');
       $announce.textContent = msg;
@@ -974,7 +971,10 @@ function bind() {
     });
   }
 
-  // 음성 unlock은 클릭/탭이 아니라 지도 드래그에서만 처리한다.
+  document.addEventListener('pointerdown', unlockSpeech, { once: true, passive: true });
+  document.addEventListener('touchstart', unlockSpeech, { once: true, passive: true });
+  document.addEventListener('click', unlockSpeech, { once: true });
+  document.addEventListener('keydown', unlockSpeech, { once: true });
 }
 
 /* =========================================================
