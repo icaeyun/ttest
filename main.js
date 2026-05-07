@@ -468,16 +468,23 @@ function isLikelyCarRoadsidePoi(poi, roadName) {
   if (!poi) return false;
   if (isNonRoadsidePoi(poi)) return false;
   if (!isRoadNameCarRoad(roadName)) return false;
-  if (!ROAD_FACING_CATS.includes(poi.cat)) return false;
 
-  // 핀과 대표 POI가 너무 멀면 실제 도로변이라고 단정하지 않는다.
-  return poi.dist <= 45;
+  // 대로/로 계열 도로명이 잡힌 상태에서
+  // 대표 지점이 놀이터/공원/단지 같은 내부 장소가 아니면 도로변 가능성을 더 넓게 허용한다.
+  if (ROAD_FACING_CATS.includes(poi.cat)) {
+    return poi.dist <= POI_NEAR_LIMIT;
+  }
+
+  // 카테고리가 애매해도 핀과 대표 지점이 아주 가까우면 도로변 근처로 본다.
+  return poi.dist <= 25;
 }
 
 function composeAnnouncement(lat, lng, info) {
   const parts = [];
   const mainPoi = pickBestPoi(info.pois);
   const isCarRoadside = isLikelyCarRoadsidePoi(mainPoi, info.roadName);
+  const roadNameLooksCarRoad = isRoadNameCarRoad(info.roadName);
+  const isInsideLikePlace = mainPoi && isNonRoadsidePoi(mainPoi);
 
   /* ① 핀 위치 */
   if (mainPoi) {
@@ -506,6 +513,12 @@ function composeAnnouncement(lat, lng, info) {
      - 차가 다니는 도로에 면한 가능성이 높은 POI일 때만 도로변이라고 말한다.
      - 놀이터/공원/단지/학교/내부 공간은 도로변으로 단정하지 않는다. */
   if (mainPoi && isCarRoadside) {
+    if (info.roadName && info.roadName.includes('대로')) {
+      parts.push('차가 다니는 대로변과 가까워 택시 승차 위치로 적절합니다.');
+    } else {
+      parts.push('차가 다니는 도로변과 가까워 택시 승차 위치로 적절합니다.');
+    }
+  } else if (roadNameLooksCarRoad && !isInsideLikePlace) {
     if (info.roadName && info.roadName.includes('대로')) {
       parts.push('차가 다니는 대로변과 가까워 택시 승차 위치로 적절합니다.');
     } else {
