@@ -921,23 +921,29 @@ function showSafariVoiceGate(lat, lng) {
     btn.textContent = '출발 위치 안내 시작';
     $splashActions.appendChild(btn);
 
-    // Google 앱/iOS Chrome에서는 click만으로 음성 언락이 약하게 잡히는 경우가 있어
-    // 실제 버튼 입력에서 pointerdown/touchend/click을 모두 받는다.
-    btn.addEventListener('pointerdown', proceedFromSafariVoiceGate, { once: true, capture: true });
+    // Google 앱/iOS Chrome에서는 pointerdown만으로 음성 언락이 인정되지 않는 경우가 있다.
+    // 첫 입력에서는 언락만 먼저 시도하고, 손을 떼는 touchend/click에서 한 번 더 언락한 뒤 지도에 진입한다.
+    btn.addEventListener('pointerdown', primeVoiceGate, { capture: true });
+    btn.addEventListener('touchstart', primeVoiceGate, { capture: true });
+    btn.addEventListener('mousedown', primeVoiceGate, { capture: true });
+
     btn.addEventListener('touchend', proceedFromSafariVoiceGate, { once: true, capture: true });
+    btn.addEventListener('pointerup', proceedFromSafariVoiceGate, { once: true, capture: true });
+    btn.addEventListener('mouseup', proceedFromSafariVoiceGate, { once: true, capture: true });
     btn.addEventListener('click', proceedFromSafariVoiceGate, { once: true, capture: true });
   }
 
-  function proceedFromSafariVoiceGate(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+  function primeVoiceGate() {
+    // pointerdown/touchstart 단계에서는 화면을 넘기지 않고 음성 엔진만 먼저 깨운다.
+    // Google 앱에서는 이 단계만으로는 부족할 수 있어, proceed 단계에서 한 번 더 실행한다.
+    unlockSpeech();
+  }
 
+  function proceedFromSafariVoiceGate(e) {
     if (voiceGatePassed) return;
     voiceGatePassed = true;
 
-    // 이 클릭/터치 제스처 안에서 iOS 음성 엔진을 조용히 언락한다.
+    // touchend/click/pointerup 단계에서 한 번 더 실행해야 Google 앱에서 잡히는 경우가 있다.
     unlockSpeech();
 
     if ($splashActions) $splashActions.hidden = true;
@@ -945,9 +951,11 @@ function showSafariVoiceGate(lat, lng) {
 
     setSplashText('출발 위치를 불러오는 중', null);
 
-    requestAnimationFrame(() => {
+    // 너무 빨리 화면을 제거하면 Google 앱에서 첫 음성 호출이 씹히는 경우가 있어
+    // 아주 짧게 유지한 뒤 지도에 진입한다.
+    setTimeout(() => {
       boot(lat, lng);
-    });
+    }, 180);
   }
 
   // iOS 계열 브라우저/앱에서 위치 권한 팝업 직후의 터치가 화면 전체 클릭으로 이어질 수 있어
