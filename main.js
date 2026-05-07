@@ -328,6 +328,34 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * 화면에 보이는 핀의 맨 아래 동그라미(.pin-dot)가 실제로 찍고 있는 지도 좌표를 반환한다.
+ * 기존 map.getCenter()는 지도 화면의 정중앙 좌표라서,
+ * CSS 핀 위치가 정중앙과 어긋나 있으면 안내 위치도 같이 어긋난다.
+ */
+function getPinnedLatLng() {
+  if (!map) return null;
+
+  try {
+    const dot = $pin ? $pin.querySelector('.pin-dot') : null;
+    const targetEl = dot || $pin;
+    if (!targetEl || !$mapEl) return map.getCenter();
+
+    const mapRect = $mapEl.getBoundingClientRect();
+    const dotRect = targetEl.getBoundingClientRect();
+
+    const x = dotRect.left + dotRect.width / 2 - mapRect.left;
+    const y = dotRect.top + dotRect.height / 2 - mapRect.top;
+
+    const proj = map.getProjection();
+    if (!proj) return map.getCenter();
+
+    return proj.coordsFromContainerPoint(new kakao.maps.Point(x, y));
+  } catch (_) {
+    return map.getCenter();
+  }
+}
+
 /* =========================================================
    주변 정보 수집
    ---------------------------------------------------------
@@ -504,8 +532,9 @@ function scheduleUpdate() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     if (!map) return;
-    const ctr = map.getCenter();
-    updateUI(ctr.getLat(), ctr.getLng());
+    const pos = getPinnedLatLng();
+    if (!pos) return;
+    updateUI(pos.getLat(), pos.getLng());
   }, ANNOUNCE_DELAY_MS);
 }
 
@@ -600,7 +629,11 @@ function initMap(lat, lng) {
     scheduleUpdate();
   });
 
-  updateUI(lat, lng);
+  requestAnimationFrame(() => {
+    const pos = getPinnedLatLng();
+    if (pos) updateUI(pos.getLat(), pos.getLng());
+    else updateUI(lat, lng);
+  });
 }
 
 /* =========================================================
@@ -1035,9 +1068,10 @@ function bind() {
   $btnConf.addEventListener('click', () => {
     unlockSpeech();
     if (!map) return;
-    const ctr = map.getCenter();
-    const lat = ctr.getLat();
-    const lng = ctr.getLng();
+    const pos = getPinnedLatLng();
+    if (!pos) return;
+    const lat = pos.getLat();
+    const lng = pos.getLng();
 
     requestGen++;
     const gen = requestGen;
